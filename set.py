@@ -12,6 +12,8 @@ from class_utils import Screen
 from class_utils import Button
 from class_utils import DropDisplay
 from class_utils import ScreenText
+from class_utils import ScrollingPlane
+from class_utils import DropZone
 
 WINDOW_WIDTH = 1000
 WINDOW_HEIGHT = 700
@@ -29,6 +31,14 @@ GREEN = (0, 255, 0)
 WHITE = (255, 255, 255)
 BLUE = (0, 0, 255)
 RED = (255,0,0)
+
+HOME = 0
+GAME = 1
+
+NOTIME = 0
+EASY = 1
+MEDIUM = 2
+HARD = 3
 
 colors = ['green', 'red', 'purple']
 shapes = ['oval', 'diamond', 'squiggle']
@@ -84,7 +94,7 @@ class TimeBox (planes.Plane):
 		planes.Plane.__init__ (self, name, rect, False, False)
 		# time is time for box to move to bottom of screen in seconds
 		self.speed = speed
-		self.image.fill(GREEN)
+		self.image.fill((100,100,100))
 
 	def update (self):
 		if self.rect.y < 0:
@@ -129,11 +139,112 @@ class BackButton (Button):
 		self.image = pygame.image.load ("img/back_icon.png")
 
 	def clicked(self, button_name):
-		print "go back to home screen"
+		self.model.mode = HOME
+
+class StartButton (Button):
+	def __init__(self, name, rect, callback, model):
+		Button.__init__ (self, name, rect, callback, model)
+		self.image = pygame.image.load ("img/plus3_icon.png")
+		self.clickbox = False
+
+	def clicked(self, button_name):
+		self.model.mode = GAME
+
+class NoTimeButton (Button):
+	def __init__(self, name, rect, callback, model):
+		Button.__init__ (self, name, rect, callback, model)
+		self.image = pygame.image.load ("img/back_icon.png")
+		self.clickbox = True
+
+	def clicked(self, button_name):
+		self.model.game_select = NOTIME
+		for button in self.model.homebuttons:
+			button.clickbox = False
+		self.clickbox = True
+
+class EasyButton (Button):
+	def __init__(self, name, rect, callback, model):
+		Button.__init__ (self, name, rect, callback, model)
+		self.image = pygame.image.load ("img/back_icon.png")
+		self.clickbox = False
+
+	def clicked(self, button_name):
+		self.model.game_select = EASY
+		for button in self.model.homebuttons:
+			button.clickbox = False
+		self.clickbox = True
+
+class MedButton (Button):
+	def __init__(self, name, rect, callback, model):
+		Button.__init__ (self, name, rect, callback, model)
+		self.image = pygame.image.load ("img/back_icon.png")
+		self.clickbox = False
+
+	def clicked(self, button_name):
+		self.model.game_select = MEDIUM
+		for button in self.model.homebuttons:
+			button.clickbox = False
+		self.clickbox = True
+
+class HardButton (Button):
+	def __init__(self, name, rect, callback, model):
+		Button.__init__ (self, name, rect, callback, model)
+		self.image = pygame.image.load ("img/back_icon.png")
+		self.clickbox = False
+
+	def clicked(self, button_name):
+		self.model.game_select = HARD
+		for button in self.model.homebuttons:
+			button.clickbox = False
+		self.clickbox = True
+        
+class Game:
+	pass
 
 class Model:
 	def __init__ (self):
 		self.background = (20,20,20)
+		self.mode = HOME
+		self.game_select = NOTIME
+
+		self.game = None
+
+		self.scroll = ScrollingPlane('scroll', 
+											pygame.Rect (0,0, 100, 100),
+											Plane('content1', pygame.Rect(0,50,50,50), False, False), 
+											draggable=False, grab=False, clicked_callback=None, dropped_upon_callback=None)
+
+		########################
+		# HOME SCREEN ELEMENTS #
+		########################
+
+		self.start_button = StartButton ("start_button",
+										pygame.Rect (3*WINDOW_WIDTH/4 + (WINDOW_WIDTH/4 - 200)/2 + 100, 360, 100, 100),
+										StartButton.clicked,
+										self)
+
+		self.notime_button = NoTimeButton ("notime_button",
+										pygame.Rect (WINDOW_WIDTH/5 - 50, WINDOW_HEIGHT - 200, 100, 100),
+										NoTimeButton.clicked,
+										self)
+		self.easy_button = EasyButton ("easy_button",
+										pygame.Rect (2*WINDOW_WIDTH/5 - 50, WINDOW_HEIGHT - 200, 100, 100),
+										EasyButton.clicked,
+										self)
+		self.med_button = MedButton ("med_button",
+										pygame.Rect (3*WINDOW_WIDTH/5 - 50, WINDOW_HEIGHT - 200, 100, 100),
+										MedButton.clicked,
+										self)
+		self.hard_button = HardButton ("hard_button",
+										pygame.Rect (4*WINDOW_WIDTH/5 - 50, WINDOW_HEIGHT - 200, 100, 100),
+										HardButton.clicked,
+										self)
+		
+
+		self.homebuttons = [self.start_button, self.notime_button, self.easy_button, self.med_button, self.hard_button]
+		########################
+		# GAME SCREEN ELEMENTS #
+		########################
 		self.deck = []
 
 		#make 81 unique cards
@@ -153,6 +264,7 @@ class Model:
 		self.out_of_play_cards = []
 
 		self.sets_found = 0
+		self.sets_wrong = 0
 		self.hints_left = 100
 
 		font1 = pygame.font.SysFont ("Arial", 40)
@@ -161,7 +273,7 @@ class Model:
 											"Sets: " + str (self.sets_found), 
 											pygame.Rect (3*WINDOW_WIDTH/4, 290, WINDOW_WIDTH/4, 50), 
 											font1)
-		self.time_label = ScreenText ("time_abel", 
+		self.time_label = ScreenText ("time_label", 
 									  "Time: " + format_secs (pygame.time.get_ticks () / 1000),
 									  pygame.Rect (3*WINDOW_WIDTH/4, 220, WINDOW_WIDTH/4, 100), 
 									  font1)
@@ -186,16 +298,16 @@ class Model:
 											"Hints Remaining: " + str (self.hints_left), 
 											pygame.Rect (3*WINDOW_WIDTH/4, 475, WINDOW_WIDTH/4, 25), 
 											font2)
-
+		
 		self.logo = planes.Plane ("setlogo",
 								  pygame.Rect (3*WINDOW_WIDTH/4, 50, 240, 162),
 								  False, False)
 		self.logo.image = pygame.image.load ("img/set.jpg")
 
-		self.time_box = TimeBox ("time_box", pygame.Rect (0, -WINDOW_HEIGHT, WINDOW_WIDTH, WINDOW_HEIGHT), 1)
+		self.time_box = TimeBox ("time_box", pygame.Rect (0, -WINDOW_HEIGHT, WINDOW_WIDTH, WINDOW_HEIGHT), self.game_select)
 
-		self.buttons = [self.add3_button, self.hint_button, self.back_button, self.logo]
-		self.labels = [self.sets_found_label, self.time_label, self.hints_left_label, self.left_in_deck_label]
+		self.gamebuttons = [self.add3_button, self.hint_button, self.back_button, self.logo]
+		self.gamelabels = [self.sets_found_label, self.time_label, self.hints_left_label, self.left_in_deck_label]
 
 	def add_new_cards (self, number, index=0):
 		if not len (self.in_play_cards) + len (self.out_of_play_cards) == len (self.deck):
@@ -224,71 +336,118 @@ class Model:
 		return self.time_box.rect.y >= 0 
 
 	def update (self):
-		if self.check_if_won ():
-			win_box = ScreenText ("win_box", "win",
-									pygame.Rect (50, 50, 
-									WINDOW_WIDTH - 100, WINDOW_HEIGHT - 100),
-									pygame.font.SysFont ("Arial", 40))
-			win_box.update_background ((255,0,0,80)) #fixthis not transparent
-			self.buttons.append (win_box)
-		elif self.check_if_lost ():
-			print "u suk"
-
-		else:
-			print "iam updating"
-			print self.time_box.rect.y
-			self.time_box.update()
-			self.actors = [self.time_box]
-
-			#check which cards are clicked
-			self.clicked_cards = []
-
-			for card in self.in_play_cards:
-				self.actors.append (card)
-				if card.been_clicked:
-					self.clicked_cards.append (card)
-				card.update()
-
+		print "SPEED ", self.game_select
+		if self.mode == HOME:
+			self.actors = self.homebuttons[:]# + self.scroll
+			clicked_button = None
 			#add click boxes
-			for card in self.clicked_cards:
-				clicked_box = planes.Plane ("box" + card.name,
-											pygame.Rect (card.rect.x-5,
-														 card.rect.y-5,
-														 card.rect.width + 10,
-														 card.rect.height + 10),
-											False, False)
-				clicked_box.image = pygame.image.load ("img/clickbox.png")
-				self.actors.insert (0, clicked_box)
+			for button in self.homebuttons:
+				if button.clickbox:
+					clicked_button = button
 
-			#check for sets
-			if len (self.clicked_cards) == 3:
-				is_set = check_set (self.clicked_cards[0], 
-									self.clicked_cards[1],
-									self.clicked_cards[2])
-				if is_set:
-					self.sets_found += 1
-					self.sets_found_label.update_text ("Sets: " + str (self.sets_found))
+			print "hella", clicked_button.name
+			clicked_box = planes.Plane ("box" + clicked_button.name,
+										pygame.Rect (clicked_button.rect.x-5,
+													 clicked_button.rect.y-5,
+													 clicked_button.rect.width + 10,
+													 clicked_button.rect.height + 10),
+										False, False)
+			#clicked_box.image = pygame.image.load ("img/clickbox.png")
+			self.actors.insert (1, clicked_box)
+			
+		else:
+			if self.check_if_won ():
 
-					#remove cards and add new ones
+				self.time_box.speed = self.game_select
+				self.time_box.update()
+				self.actors = [self.time_box]
+				#self.actors = []
+
+				for card in self.in_play_cards:
+					self.actors.append (card)
+					if card.been_clicked:
+						self.clicked_cards.append (card)
+					card.update()
+
+				self.actors += self.gamelabels + self.gamebuttons
+				self.time_label.update_text ("Time: " + format_secs (pygame.time.get_ticks () / 1000))
+				self.hints_left_label.update_text ("Hints Remaining: " + str (self.hints_left))
+				self.left_in_deck_label.update_text ("Deck: " + str (len (self.deck) - (len (self.in_play_cards) + len (self.out_of_play_cards))))
+
+				win_box = Plane('win_box',
+					pygame.Rect(left_margin, top_margin, 3*CARD_WIDTH + 2*space_horiz, 4*CARD_HEIGHT + 3*((WINDOW_HEIGHT - 4*CARD_HEIGHT - 2*top_margin) / 3)))
+
+
+				print "HECKA HECK WINNA WINNA"
+				win_box.image.fill((0,0,0))
+				win_text = ScreenText ("win_text", "winna winna",
+										pygame.Rect(left_margin, top_margin, 3*CARD_WIDTH + 2*space_horiz, 4*CARD_HEIGHT + 3*((WINDOW_HEIGHT - 4*CARD_HEIGHT - 2*top_margin) / 3)),
+										pygame.font.SysFont ("Arial", 40))
+				win_text.background_color = (255,0,0) #fixthis not transparent
+				self.actors.append (win_box)
+				self.actors.append (win_text)
+
+			elif self.check_if_lost ():
+				print "u suk"
+
+			else:
+				if self.mode == GAME:
+					print "iam updating"
+					print self.time_box.rect.y
+					self.time_box.speed = self.game_select
+					self.time_box.update()
+					self.actors = [self.time_box]
+					#self.actors = []
+
+					#check which cards are clicked
+					self.clicked_cards = []
+
+					for card in self.in_play_cards:
+						self.actors.append (card)
+						if card.been_clicked:
+							self.clicked_cards.append (card)
+						card.update()
+
+					#add click boxes
 					for card in self.clicked_cards:
-						self.out_of_play_cards.append (card)
-						index = self.in_play_cards.index (card)
-						self.in_play_cards.remove (card)
-						if len (self.in_play_cards) < 12:
-							self.add_new_cards (1, index)
+						clicked_box = planes.Plane ("box" + card.name,
+													pygame.Rect (card.rect.x-5,
+																 card.rect.y-5,
+																 card.rect.width + 10,
+																 card.rect.height + 10),
+													False, False)
+						clicked_box.image = pygame.image.load ("img/clickbox.png")
+						self.actors.insert (1, clicked_box)
 
-				else:
-					if self.sets_found > 0:
-						self.sets_found -= 1
-					self.sets_found_label.update_text ("Sets: " + str (self.sets_found))
-				for card in self.clicked_cards:
-					card.been_clicked = False
+					#check for sets
+					if len (self.clicked_cards) == 3:
+						is_set = check_set (self.clicked_cards[0], 
+											self.clicked_cards[1],
+											self.clicked_cards[2])
+						if is_set:
+							self.sets_found += 1
+							self.sets_found_label.update_text ("Sets: " + str (self.sets_found))
 
-			self.actors += self.labels
-			self.time_label.update_text ("Time: " + format_secs (pygame.time.get_ticks () / 1000))
-			self.hints_left_label.update_text ("Hints Remaining: " + str (self.hints_left))
-			self.left_in_deck_label.update_text ("Deck: " + str (len (self.deck) - (len (self.in_play_cards) + len (self.out_of_play_cards))))
+							#remove cards and add new ones
+							for card in self.clicked_cards:
+								self.out_of_play_cards.append (card)
+								index = self.in_play_cards.index (card)
+								self.in_play_cards.remove (card)
+								if len (self.in_play_cards) < 12:
+									self.add_new_cards (1, index)
 
+						else:
+							if self.sets_found > 0:
+								self.sets_wrong += 1
+							self.sets_found_label.update_text ("Sets: " + str (self.sets_found))
+						for card in self.clicked_cards:
+							card.been_clicked = False
+
+					self.actors += self.gamelabels + self.gamebuttons
+					self.time_label.update_text ("Time: " + format_secs (pygame.time.get_ticks () / 1000))
+					self.hints_left_label.update_text ("Hints Remaining: " + str (self.hints_left))
+					self.left_in_deck_label.update_text ("Deck: " + str (len (self.deck) - (len (self.in_play_cards) + len (self.out_of_play_cards))))
+			
 class View:
 	def __init__ (self, model, screen):
 		self.model = model
@@ -348,14 +507,12 @@ class View:
 
 		for actor in self.model.actors:
 			self.screen.sub (actor)
-		for button in self.model.buttons:
-			self.screen.sub (button)
 
 if __name__ == "__main__":
 	pygame.init ()
 	size = (WINDOW_WIDTH, WINDOW_HEIGHT)
-	screen = DropDisplay (size)
-	screen.grab = True
+	screen = planes.Display (size)
+	screen.grab = False
 	screen.image.fill (BLACK)
 	model = Model ()
 	view = View (model, screen)
@@ -365,8 +522,6 @@ if __name__ == "__main__":
 	
 	for actor in model.actors:
 		screen.sub (actor)
-	for button in model.buttons:
-		screen.sub (button)
 
 	while running:
 		events = pygame.event.get ()
@@ -388,4 +543,5 @@ if __name__ == "__main__":
 # win condition
 # avg time per set
 # hints
-	
+# start new game on back button_name
+# currently is pause button - make one?

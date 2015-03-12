@@ -35,9 +35,11 @@ HOME = 0
 GAME = 1
 
 NOTIME = 0
-EASY = 1
+EASY = 4
 MEDIUM = 2
-HARD = 3
+HARD = 1
+
+NUM_HINTS = 100
 
 colors = ['green', 'red', 'purple']
 shapes = ['oval', 'diamond', 'squiggle']
@@ -94,11 +96,12 @@ class TimeBox (planes.Plane):
 		# time is time for box to move to bottom of screen in seconds
 		self.speed = speed
 		self.image.fill ((100,100,100))
+		self.counter = 1 # need this because it can't move by fractional pixels
 
 	def update (self):
-		print "i go down"
-		if self.rect.y < 0:
-			self.rect.y += self.speed
+		self.counter += 1
+		if self.speed != 0 and self.rect.y < 0 and (self.counter % self.speed) == 0:
+			self.rect.y += 1
 
 class AddThreeCardsButton (Button):
 	def __init__(self, name, rect, callback, model):
@@ -256,7 +259,7 @@ class StatsButton (Button):
 				avg_time = format_secs (sum (self.model.times) / len (self.model.times))
 			
 			message_box = Plane ('message_box',
-					pygame.Rect (left_margin, top_margin, 3*CARD_WIDTH + 2*space_horiz, 2*CARD_HEIGHT + 3*((WINDOW_HEIGHT - 4*CARD_HEIGHT - 2*top_margin) / 3)))
+					pygame.Rect (left_margin, top_margin, 13*WINDOW_WIDTH/16, (WINDOW_HEIGHT-300)))
 			message_box.image.fill ((0,0,0))
 
 			win_stats = "Game Stats \n" + "Number of Games: " + num_games + "\nBest time: " + best_time + "\nAverage time: " + avg_time
@@ -265,7 +268,7 @@ class StatsButton (Button):
 
 			message_texts = []
 			lines = win_stats.split ("\n")
-			box_width = 3*CARD_WIDTH + 2*space_horiz
+			box_width = 13*WINDOW_WIDTH/16
 			for line in lines:
 				message_texts.append (ScreenText (line, line, 
 									pygame.Rect(left_margin, top_margin + 60*(lines.index(line)+1) ,box_width, 45), pygame.font.SysFont ("Arial", 40)))
@@ -312,7 +315,7 @@ class Game ():
 
 		self.sets_found = 0
 		self.sets_wrong = 0
-		self.hints_left = 100
+		self.hints_left = NUM_HINTS
 
 		self.added_time = False
 
@@ -525,6 +528,9 @@ class Game ():
 					self.sets_found += 1
 					self.sets_found_label.update_text ("Sets: " + str (self.sets_found))
 
+					# reset the time box
+					self.time_box.rect.y = -WINDOW_HEIGHT
+
 					#remove cards and add new ones
 					for card in self.clicked_cards:
 						self.out_of_play_cards.append (card)
@@ -562,6 +568,8 @@ class Model:
 
 		#self.ok = planes.gui.OkBox('press okay')
 
+		self.title = planes.Plane("title", pygame.Rect (left_margin, top_margin, 13*WINDOW_WIDTH/16, (WINDOW_HEIGHT-300)))
+
 
 		self.start_button = StartButton ("start_button",
 										pygame.Rect (3*WINDOW_WIDTH/4 + (WINDOW_WIDTH/4 - 200)/2 + 100, 50, 100, 100),
@@ -595,7 +603,7 @@ class Model:
 	def update (self):
 		if self.mode == HOME:
 			print self.times
-			self.actors = self.homebuttons[:]# + self.scroll
+			self.actors = [self.title] + self.homebuttons[:]# + self.scroll
 			if self.show_stats != None:
 				self.actors += self.show_stats
 			#self.actors.append (self.ok)

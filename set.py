@@ -1,3 +1,6 @@
+# Anne LoVerso
+# Python Set Game
+
 import pygame
 import math
 from pygame.locals import *
@@ -5,14 +8,14 @@ import random
 import time
 from abc import ABCMeta, abstractmethod
 import planes
-from planes import Plane
 import planes.gui
 
-from class_utils import Screen
 from class_utils import Button
-from class_utils import DropDisplay
 from class_utils import ScreenText
-from class_utils import DropZone
+
+####################
+# DEFINE CONSTANTS #
+####################
 
 WINDOW_WIDTH = 1000
 WINDOW_HEIGHT = 700
@@ -22,7 +25,6 @@ CARD_HEIGHT = 100
 
 top_margin = 50
 left_margin = 50
-
 space_horiz = ((3*WINDOW_WIDTH/4)-2*left_margin-3*CARD_WIDTH)/2
 
 BLACK = (0, 0, 0)
@@ -31,8 +33,8 @@ WHITE = (255, 255, 255)
 BLUE = (0, 0, 255)
 RED = (255,0,0)
 
-HOME = 0
-GAME = 1
+MODE_HOME = 0
+MODE_GAME = 1
 
 NOTIME = 0
 EASY = 4
@@ -41,11 +43,19 @@ HARD = 1
 
 NUM_HINTS = 100
 
+FONT_BIG = pygame.font.SysFont ("Arial", 40)
+FONT_SMALL = pygame.font.SysFont ("Arial", 20)
+
 colors = ['green', 'red', 'purple']
 shapes = ['oval', 'diamond', 'squiggle']
 numbers = [1,2,3]
 shades = ['filled','shaded', 'empty']
 
+'''
+Given three cards, checks whether they form a Set
+Args: card1, card2, card3 - objects of type Card
+Returns: True if cards form a Set, False otherwise
+'''
 def check_set (card1, card2, card3):
 	color_check = all_same_or_all_diff (card1.color, card2.color, card3.color)
 	shape_check = all_same_or_all_diff (card1.shape, card2.shape, card3.shape)
@@ -53,6 +63,13 @@ def check_set (card1, card2, card3):
 	shade_check = all_same_or_all_diff (card1.shade, card2.shade, card3.shade)
 	return color_check and shape_check and num_check and shade_check
 
+'''
+Given three attributes (one from each of three cards), checks whether the
+they are either all the same, or all different
+Functions as a helper method to check_set
+Args: attr1, attr2, attr3 - attributes of a card (color, shape, number, shade)
+Returns: True if all three attributes are equal OR none of them are equal, False otherwise
+'''
 def all_same_or_all_diff (attr1, attr2, attr3):
 	if attr1 == attr2 and attr2 == attr3:
 		return True
@@ -61,11 +78,18 @@ def all_same_or_all_diff (attr1, attr2, attr3):
 	else:
 		return False
 
+'''
+Helper function, takes a game time in seconds and formats it into a human-readable string
+Returns string in format, for example: "1m 20s"
+'''
 def format_secs (secs):
 	minutes = secs / 60
 	seconds = secs % 60
 	return str (minutes) + "m " + str (seconds) + "s"
 
+'''
+a Card has attributes of color, shape, number, and shade
+'''
 class Card (planes.Plane):
 	def __init__ (self, name, color, shape, number, shade):
 		planes.Plane.__init__ (self, name, pygame.Rect (0,0,CARD_WIDTH,CARD_HEIGHT), False, False)
@@ -90,6 +114,9 @@ class Card (planes.Plane):
 	def update (self):
 		pass
 
+'''
+The TimeBox is a box that serves as a timer, slowly moving down and filling the screen
+'''
 class TimeBox (planes.Plane):
 	def __init__ (self, name, rect, speed):
 		planes.Plane.__init__ (self, name, rect, False, False)
@@ -103,23 +130,34 @@ class TimeBox (planes.Plane):
 		if self.speed != 0 and self.rect.y < 0 and (self.counter % self.speed) == 0:
 			self.rect.y += 1
 
+##################
+# BUTTON CLASSES #
+##################
+
+# GAME BUTTON
+### When clicked, adds three new cards if no Set on the board
 class AddThreeCardsButton (Button):
 	def __init__(self, name, rect, callback, model):
 		Button.__init__ (self, name, rect, callback, model)
 		self.image = pygame.image.load ("img/plus3_icon.png")
 
 	def clicked (self, button_name):
-		if self.model.paused_time_at == 0:
+		if self.model.check_in_play():
 			if not self.model.check_if_any_sets:
 				self.model.add_new_cards (3)
 
+# GAME BUTTON
+### When clicked, gives a hint
+### If Set on the board: highlights the next card in the Set
+### If no Set on board: adds three new cards
+### Ignores cards already clicked, so user should not click when cards are highlighted
 class HintButton (Button):
 	def __init__(self, name, rect, callback, model):
 		Button.__init__ (self, name, rect, callback, model)
 		self.image = pygame.image.load ("img/hint_icon.png")
 
 	def clicked (self, button_name):
-		if self.model.paused_time_at == 0:
+		if self.model.check_in_play():
 			if (self.model.hints_left > 0):
 				self.model.hints_left -= 1
 				for card1 in self.model.in_play_cards:
@@ -138,6 +176,23 @@ class HintButton (Button):
 											return
 				self.model.add_new_cards (3)
 
+# GAME BUTTON
+### When clicked, pauses time in game
+class PauseButton (Button):
+	def __init__(self, name, rect, callback, model):
+		Button.__init__ (self, name, rect, callback, model)
+		self.image = pygame.image.load ("img/pause_icon.png")
+
+	def clicked (self, button_name):
+		if not (self.model.check_if_lost() or self.model.check_if_won()):
+			if self.model.paused_time_at != 0: # game is already paused, act as play button
+				self.model.pause_time += pygame.time.get_ticks () - self.model.paused_time_at
+				self.model.paused_time_at = 0
+			else:
+				self.model.paused_time_at = pygame.time.get_ticks ()
+
+# GAME BUTTON (pause screen)
+### When clicked, return to Homescreen
 class BackButton (Button):
 	def __init__(self, name, rect, callback, model):
 		Button.__init__ (self, name, rect, callback, model)
@@ -145,20 +200,10 @@ class BackButton (Button):
 
 	def clicked (self, button_name):
 		self.model.model.game = None
-		self.model.model.mode = HOME
+		self.model.model.mode = MODE_HOME
 
-class PauseButton (Button):
-	def __init__(self, name, rect, callback, model):
-		Button.__init__ (self, name, rect, callback, model)
-		self.image = pygame.image.load ("img/pause_icon.png")
-
-	def clicked (self, button_name):
-		if self.model.paused_time_at != 0: # game is already paused, act as play button
-			self.model.pause_time += pygame.time.get_ticks () - self.model.paused_time_at
-			self.model.paused_time_at = 0
-		else:
-			self.model.paused_time_at = pygame.time.get_ticks ()
-
+# GAME BUTTON (pause screen)
+### When clicked, resume game time
 class PlayButton (Button):
 	def __init__(self, name, rect, callback, model):
 		Button.__init__ (self, name, rect, callback, model)
@@ -172,7 +217,8 @@ class PlayButton (Button):
 			self.model.pause_time += pygame.time.get_ticks () - self.model.paused_time_at
 			self.model.paused_time_at = 0
 
-
+# GAME BUTTON (pause screen)
+### Restarts the game by creating a new Game object
 class RestartButton (Button):
 	def __init__(self, name, rect, callback, model):
 		Button.__init__ (self, name, rect, callback, model)
@@ -182,17 +228,21 @@ class RestartButton (Button):
 		self.model.model.game = None
 		self.model.model.game = Game (self.model.model.game_select, self.model.model)
 
+# HOME BUTTON
+### Starts a new game by creating a new Game object
 class StartButton (Button):
-	### Starts a NEW game
 	def __init__(self, name, rect, callback, model):
 		Button.__init__ (self, name, rect, callback, model)
 		self.image = pygame.image.load ("img/start_icon.png")
-		self.clickbox = False
+		self.clickbox = False   # all home screen buttons have a clickbox option
+								# which shows up as blakc box to indicate selection
 
 	def clicked (self, button_name):
-		self.model.mode = GAME
+		self.model.mode = MODE_GAME
 		self.model.game = Game (self.model.game_select, self.model)
 
+# HOME BUTTON
+### Sets game_select mode to no timer
 class NoTimeButton (Button):
 	def __init__(self, name, rect, callback, model):
 		Button.__init__ (self, name, rect, callback, model)
@@ -205,6 +255,8 @@ class NoTimeButton (Button):
 			button.clickbox = False
 		self.clickbox = True
 
+# HOME BUTTON
+### Sets game_select mode to easy
 class EasyButton (Button):
 	def __init__(self, name, rect, callback, model):
 		Button.__init__ (self, name, rect, callback, model)
@@ -217,6 +269,8 @@ class EasyButton (Button):
 			button.clickbox = False
 		self.clickbox = True
 
+# HOME BUTTON
+### Sets game_select mode to medium
 class MedButton (Button):
 	def __init__(self, name, rect, callback, model):
 		Button.__init__ (self, name, rect, callback, model)
@@ -229,6 +283,8 @@ class MedButton (Button):
 			button.clickbox = False
 		self.clickbox = True
 
+# HOME BUTTON
+### Sets game_select mode to hard
 class HardButton (Button):
 	def __init__(self, name, rect, callback, model):
 		Button.__init__ (self, name, rect, callback, model)
@@ -241,6 +297,9 @@ class HardButton (Button):
 			button.clickbox = False
 		self.clickbox = True
 
+# HOME BUTTON
+### When clicked, display game statistics
+### Number of games, best time, average time
 class StatsButton (Button):
 	def __init__(self, name, rect, callback, model):
 		Button.__init__ (self, name, rect, callback, model)
@@ -248,7 +307,7 @@ class StatsButton (Button):
 		self.clickbox = False
 
 	def clicked (self, button_name):
-		if len (self.model.show_stats) > 0: # we are already showing stats
+		if len (self.model.show_stats) > 0: # we are already showing stats, unshow
 			self.model.show_stats = []
 		else:
 			num_games = str (len (self.model.times))
@@ -258,20 +317,18 @@ class StatsButton (Button):
 				best_time = format_secs (min (self.model.times))
 				avg_time = format_secs (sum (self.model.times) / len (self.model.times))
 			
-			message_box = Plane ('message_box',
+			message_box = planes.Plane ('message_box',
 					pygame.Rect (left_margin, top_margin, 13*WINDOW_WIDTH/16, (WINDOW_HEIGHT-300)))
 			message_box.image.fill ((0,0,0))
 
 			win_stats = "Game Stats \n" + "Number of Games: " + num_games + "\nBest time: " + best_time + "\nAverage time: " + avg_time
-
-			print win_stats
 
 			message_texts = []
 			lines = win_stats.split ("\n")
 			box_width = 13*WINDOW_WIDTH/16
 			for line in lines:
 				message_texts.append (ScreenText (line, line, 
-									pygame.Rect(left_margin, top_margin + 60*(lines.index(line)+1) ,box_width, 45), pygame.font.SysFont ("Arial", 40)))
+									pygame.Rect(left_margin, top_margin + 60*(lines.index(line)+1) ,box_width, 45), FONT_BIG))
 			# message_text = ScreenText ("message_text", win_stats,
 			# 						pygame.Rect (left_margin, top_margin, 3*CARD_WIDTH + 2*space_horiz, 4*CARD_HEIGHT + 3*((WINDOW_HEIGHT - 4*CARD_HEIGHT - 2*top_margin) / 3)),
 			# 						pygame.font.SysFont ("Arial", 40))
@@ -280,7 +337,10 @@ class StatsButton (Button):
 			#message_text.background_color = (255,0,0) #fixthis not transparent
 			self.model.show_stats.append (message_box)
 			self.model.show_stats += message_texts
-        
+  
+'''
+A Game is a single game that ends when won, lost or cancelled
+'''      
 class Game ():
 	def __init__(self, game_select, model):
 		########################
@@ -295,9 +355,9 @@ class Game ():
 		self.paused_time_at = 0
 
 		self.start_time = pygame.time.get_ticks ()
-		self.end_time = 0
+		self.end_time = 0 # time game ended at
 
-		#make 81 unique cards
+		#make 81 unique cards, add to deck
 		for color in colors:
 			for shape in shapes:
 				for number in numbers:
@@ -314,25 +374,26 @@ class Game ():
 		self.out_of_play_cards = []
 
 		self.sets_found = 0
-		self.sets_wrong = 0
+		self.sets_wrong = 0 # should we take off points for these?
 		self.hints_left = NUM_HINTS
 
+		# tells if we have already added the game time to the times []
+		# prevents from adding the time on every update loop
 		self.added_time = False
 
-		font1 = pygame.font.SysFont ("Arial", 40)
-		font2 = pygame.font.SysFont ("Arial", 20)
+		#### Elements of a game ####
 		self.sets_found_label = ScreenText ("sets_found_label", 
 											"Sets: " + str (self.sets_found), 
 											pygame.Rect (3*WINDOW_WIDTH/4, 290, WINDOW_WIDTH/4, 50), 
-											font1)
+											FONT_BIG)
 		self.time_label = ScreenText ("time_label", 
 									  "Time: " + format_secs (self.start_time / 1000),
 									  pygame.Rect (3*WINDOW_WIDTH/4, 220, WINDOW_WIDTH/4, 100),
-									  font1)
+									  FONT_BIG)
 		self.left_in_deck_label = ScreenText ("left_in_deck_label", 
 									  "Deck: " + str (len (self.deck) - (len (self.in_play_cards) + len (self.out_of_play_cards))),
 									  pygame.Rect (3*WINDOW_WIDTH/4, 505, WINDOW_WIDTH/4, 25), 
-									  font2)
+									  FONT_SMALL)
 
 		self.add3_button = AddThreeCardsButton ("add_three_cards_button",
 												pygame.Rect (3*WINDOW_WIDTH/4 + (WINDOW_WIDTH/4 - 200)/2, 360, 100, 100),
@@ -349,7 +410,7 @@ class Game ():
 		self.hints_left_label = ScreenText ("hints_left_label", 
 											"Hints Remaining: " + str (self.hints_left), 
 											pygame.Rect (3*WINDOW_WIDTH/4, 475, WINDOW_WIDTH/4, 25), 
-											font2)
+											FONT_SMALL)
 		self.logo = planes.Plane ("setlogo",
 								  pygame.Rect (3*WINDOW_WIDTH/4, 50, 240, 162),
 								  False, False)
@@ -358,7 +419,7 @@ class Game ():
 
 
 		#### PAUSE SCREEN BUTTONS ####
-		message_width = 3*CARD_WIDTH + 2*space_horiz
+		message_width = 3*CARD_WIDTH + 2*space_horiz # width of playing field
 
 		self.play_button = PlayButton ("play_button",
 										pygame.Rect (2*message_width/5 - 50, WINDOW_HEIGHT - 300, 100, 100),
@@ -380,6 +441,10 @@ class Game ():
 		# start the game
 		self.add_new_cards (12)
 
+	# Add cards to the in-play cards
+	# Number = number of cards to add
+	# Index allows adding 1 card in the same position as a removed card
+	# Does not check whether we SHOULD because assumes we have checked that before calling
 	def add_new_cards (self, number, index=0):
 		if not len (self.in_play_cards) + len (self.out_of_play_cards) == len (self.deck):
 			i = 0
@@ -390,6 +455,7 @@ class Game ():
 					self.in_play_cards.insert (index, card)
 					i += 1
 
+	# Checks if any sets on the board
 	def check_if_any_sets (self):
 		for card1 in self.in_play_cards:
 			for card2 in self.in_play_cards:
@@ -399,109 +465,78 @@ class Game ():
 							return True
 		return False
 
+	# Checks if game is won
 	def check_if_won (self):
 		return (not self.check_if_any_sets ()) and \
 			   (len (self.in_play_cards) + len (self.out_of_play_cards) == len (self.deck))
 
+	# Game can only be lost if playing in time mode
 	def check_if_lost (self):
-		return self.time_box.rect.y >= 0 
+		return self.time_box.rect.y >= 0
 
+	# Game can only be lost if playing in time mode
+	def check_in_play (self):
+		return not self.check_if_won() and not self.check_if_lost() and self.paused_time_at == 0 
+
+	# Called infinitely
 	def update (self):
-		if self.check_if_won () or self.check_if_lost ():
-			if self.check_if_won () and not self.added_time:
-				self.model.times.append ((pygame.time.get_ticks () - self.start_time)/ 1000)
-				self.added_time = True
-			if self.end_time == 0:
-				self.end_time = pygame.time.get_ticks ()
-
-			#self.time_box.speed = self.game_select
-			#self.time_box.update ()
-			self.actors = [self.time_box]
-			#self.actors = []
-
-			for card in self.in_play_cards:
-				self.actors.append (card)
-				
+		# if game not in play, display messages, not cards
+		if not self.check_in_play():
+			self.actors = []
 			self.actors += self.gamelabels + self.gamebuttons
 			self.hints_left_label.update_text ("Hints Remaining: " + str (self.hints_left))
 			self.left_in_deck_label.update_text ("Deck: " + str (len (self.deck) - (len (self.in_play_cards) + len (self.out_of_play_cards))))
 
-			message_box = Plane ('message_box',
-				pygame.Rect (left_margin, top_margin, 3*CARD_WIDTH + 2*space_horiz, 4*CARD_HEIGHT + 3*((WINDOW_HEIGHT - 4*CARD_HEIGHT - 2*top_margin) / 3)))
-
+			message_box = planes.Plane ('message_box',
+					pygame.Rect (left_margin, top_margin, 3*CARD_WIDTH + 2*space_horiz, 4*CARD_HEIGHT + 3*((WINDOW_HEIGHT - 4*CARD_HEIGHT - 2*top_margin) / 3)))
 			message_box.image.fill ((0,0,0))
-
-			best_time = ""
-			if len(self.model.times) == 0:
-				best_time = format_secs ((self.end_time - self.start_time - self.pause_time)/ 1000)
-			else:
-				best_time = format_secs (min (self.model.times))
-
-			win_stats = "Game Complete! \n" + "Total time: " + format_secs ((self.end_time - self.start_time - self.pause_time)/ 1000) + "\n" + \
-						"Best time: " + best_time
-
-			lose_stats = "Game Over!"
-
-			stats = win_stats
-			if self.check_if_lost ():
-				stats = lose_stats
-
 			message_texts = []
-			lines = stats.split ("\n")
-			box_width = 3*CARD_WIDTH + 2*space_horiz
-			for line in lines:
-				message_texts.append (ScreenText (line, line, 
-									pygame.Rect(left_margin, top_margin + 50*(lines.index(line)+1) ,box_width, 45), pygame.font.SysFont ("Arial", 40)))
-			# message_text = ScreenText ("message_text", win_stats,
-			# 						pygame.Rect (left_margin, top_margin, 3*CARD_WIDTH + 2*space_horiz, 4*CARD_HEIGHT + 3*((WINDOW_HEIGHT - 4*CARD_HEIGHT - 2*top_margin) / 3)),
-			# 						pygame.font.SysFont ("Arial", 40))
-			
 
-			#message_text.background_color = (255,0,0) #fixthis not transparent
+			# if game won or lost, note time game ended
+			if self.check_if_won () or self.check_if_lost ():
+				if self.check_if_won () and not self.added_time:
+					self.model.times.append ((pygame.time.get_ticks () - self.start_time)/ 1000)
+					self.added_time = True
+				if self.end_time == 0:
+					self.end_time = pygame.time.get_ticks ()
+
+				best_time = ""
+				if len(self.model.times) == 0:
+					best_time = format_secs ((self.end_time - self.start_time - self.pause_time)/ 1000)
+				else:
+					best_time = format_secs (min (self.model.times))
+
+				win_stats = "Game Complete! \n" + "Total time: " + format_secs ((self.end_time - self.start_time - self.pause_time)/ 1000) + "\n" + \
+							"Best time: " + best_time
+
+				lose_stats = "Game Over!"
+
+				stats = win_stats
+				if self.check_if_lost ():
+					stats = lose_stats
+
+				lines = stats.split ("\n")
+				box_width = 3*CARD_WIDTH + 2*space_horiz
+				for line in lines:
+					message_texts.append (ScreenText (line, line, 
+										pygame.Rect(left_margin, top_margin + 50*(lines.index(line)+1) ,box_width, 45), FONT_BIG))
+
+			elif self.paused_time_at != 0: #game is paused
+				message_texts.append (ScreenText ("message_text", "Game Paused",
+										pygame.Rect (left_margin, top_margin, 3*CARD_WIDTH + 2*space_horiz, 4*CARD_HEIGHT + 3*((WINDOW_HEIGHT - 4*CARD_HEIGHT - 2*top_margin) / 3)),
+										FONT_BIG))
+				
 			self.actors.append (message_box)
 			self.actors += message_texts
-			if self.check_if_lost ():
-				pass
-				#message_texts.update_text (lose_stats)
 			self.actors += self.pausebuttons
-		
-		elif self.paused_time_at != 0: #game is paused
-			#print self.time_box.rect.y
-			#self.time_box.speed = self.game_select
-			self.actors = []
 
-			for card in self.in_play_cards:
-				self.actors.append (card)
-				
-			self.actors += self.gamelabels + self.gamebuttons
-			self.hints_left_label.update_text ("Hints Remaining: " + str (self.hints_left))
-			self.left_in_deck_label.update_text ("Deck: " + str (len (self.deck) - (len (self.in_play_cards) + len (self.out_of_play_cards))))
-
-			message_box = Plane ('message_box',
-				pygame.Rect (left_margin, top_margin, 3*CARD_WIDTH + 2*space_horiz, 4*CARD_HEIGHT + 3*((WINDOW_HEIGHT - 4*CARD_HEIGHT - 2*top_margin) / 3)))
-
-			message_box.image.fill ((0,0,0))
-
-			message_text = ScreenText ("message_text", "Game Paused",
-									pygame.Rect (left_margin, top_margin, 3*CARD_WIDTH + 2*space_horiz, 4*CARD_HEIGHT + 3*((WINDOW_HEIGHT - 4*CARD_HEIGHT - 2*top_margin) / 3)),
-									pygame.font.SysFont ("Arial", 40))
-			message_text.background_color = (255,0,0) #fixthis not transparent
-			self.actors.append (message_box)
-			self.actors.append (message_text)
-			for button in self.pausebuttons:
-				self.actors.append (button)
-
+		# game in play
 		else:
-			print "iam updating"
-			print self.time_box.rect.y
-			self.time_box.speed = self.game_select
 			self.time_box.update ()
 			self.actors = [self.time_box]
-			#self.actors = []
 
 			#check which cards are clicked
 			self.clicked_cards = []
-
 			for card in self.in_play_cards:
 				self.actors.append (card)
 				if card.been_clicked:
@@ -538,11 +573,8 @@ class Game ():
 						self.in_play_cards.remove (card)
 						if len (self.in_play_cards) < 12:
 							self.add_new_cards (1, index)
-
 				else:
-					if self.sets_found > 0:
-						self.sets_wrong += 1
-					self.sets_found_label.update_text ("Sets: " + str (self.sets_found))
+					self.sets_wrong += 1
 				for card in self.clicked_cards:
 					card.been_clicked = False
 
@@ -551,14 +583,19 @@ class Game ():
 			self.hints_left_label.update_text ("Hints Remaining: " + str (self.hints_left))
 			self.left_in_deck_label.update_text ("Deck: " + str (len (self.deck) - (len (self.in_play_cards) + len (self.out_of_play_cards))))
 
+'''
+The Model is the overall object in controlling the entire program
+It instantiates Game objects as needed but also contains home screen
+'''
 class Model:
 	def __init__ (self):
 		self.background = (20,20,20)
-		self.mode = HOME
+		self.mode = MODE_HOME
 		self.game_select = NOTIME
 
 		self.game = None
 		self.actors = []
+		#self.times_file = open("times_file.txt","rw+")
 		self.times = []
 		self.show_stats = [] # a list of things for stats screen
 
@@ -566,10 +603,7 @@ class Model:
 		# HOME SCREEN ELEMENTS #
 		########################
 
-		#self.ok = planes.gui.OkBox('press okay')
-
 		self.title = planes.Plane("title", pygame.Rect (left_margin, top_margin, 13*WINDOW_WIDTH/16, (WINDOW_HEIGHT-300)))
-
 
 		self.start_button = StartButton ("start_button",
 										pygame.Rect (3*WINDOW_WIDTH/4 + (WINDOW_WIDTH/4 - 200)/2 + 100, 50, 100, 100),
@@ -599,21 +633,18 @@ class Model:
 
 		self.homebuttons = [self.start_button, self.notime_button, self.easy_button, self.med_button, self.hard_button, self.stats_button]
 		
-
+	# update model - either update homescreen or update game
 	def update (self):
-		if self.mode == HOME:
-			print self.times
-			self.actors = [self.title] + self.homebuttons[:]# + self.scroll
+		if self.mode == MODE_HOME:
+			self.actors = [self.title] + self.homebuttons[:]
 			if self.show_stats != None:
 				self.actors += self.show_stats
-			#self.actors.append (self.ok)
 			clicked_button = None
-			#add click boxes
+			#add click box 
 			for button in self.homebuttons:
 				if button.clickbox:
 					clicked_button = button
 
-			print "hella", clicked_button.name
 			clicked_box = planes.Plane ("box" + clicked_button.name,
 										pygame.Rect (clicked_button.rect.x-5,
 													 clicked_button.rect.y-5,
@@ -621,21 +652,21 @@ class Model:
 													 clicked_button.rect.height + 10),
 										False, False)
 
-			#clicked_box.image = pygame.image.load ("img/clickbox.png")
 			self.actors.insert (1, clicked_box)
 		
 		else:
 			self.game.update ()
 			self.actors = self.game.actors[:]
 
-
+'''
+Draw elements of Model actors onto screen
+'''
 class View:
 	def __init__ (self, model, screen):
 		self.model = model
 		self.screen = screen
 
 	def draw (self):
-		space_vert = 50
 		screen.remove_all ()
 		if isinstance (self.model.background, str):
 			self.screen.image = pygame.transform.scale (pygame.image.load (self.model.background),
@@ -646,7 +677,9 @@ class View:
 		#put cards in play into a grid:
 
 		if model.game != None:
-
+			space_vert = 50
+			# space_vert changes so that cards adjust themselves if more than 12
+			# never more than 21, any collection of 20 cards must contain a Set
 			if len (self.model.game.in_play_cards) == 12:
 				space_vert = (WINDOW_HEIGHT - 4*CARD_HEIGHT - 2*top_margin) / 3
 			elif len (self.model.game.in_play_cards) == 15:
@@ -656,6 +689,7 @@ class View:
 			elif len (self.model.game.in_play_cards) == 21:
 				space_vert = (WINDOW_HEIGHT - 7*CARD_HEIGHT - 2*top_margin) / 6
 
+			# create positions of cards
 			positions =[(left_margin, top_margin), 
 						(left_margin + CARD_WIDTH + space_horiz, top_margin), 
 						(left_margin + 2*CARD_WIDTH + 2*space_horiz, top_margin),
@@ -683,14 +717,17 @@ class View:
 						(left_margin, top_margin + 6*CARD_HEIGHT + 6*space_vert),
 						(left_margin + CARD_WIDTH + space_horiz, top_margin + 6*CARD_HEIGHT + 6*space_vert),
 						(left_margin + 2*CARD_WIDTH + 2*space_horiz, top_margin + 6*CARD_HEIGHT + 6*space_vert) ]
-							
+			
+			# assign positions to cards in play
 			for i in range (len (self.model.game.in_play_cards)):
 				self.model.game.in_play_cards[i].rect.x = positions[i][0]
 				self.model.game.in_play_cards[i].rect.y = positions[i][1]
 
+		# add all actors to screen
 		for actor in self.model.actors:
 			self.screen.sub (actor)
 
+# THE MAIN LOOP
 if __name__ == "__main__":
 	pygame.init ()
 	size = (WINDOW_WIDTH, WINDOW_HEIGHT)
@@ -700,9 +737,6 @@ if __name__ == "__main__":
 	model = Model ()
 	view = View (model, screen)
 	running = True
-
-	for actor in model.actors:
-		screen.sub (actor)
 
 	while running:
 		events = pygame.event.get ()
@@ -721,9 +755,5 @@ if __name__ == "__main__":
 
 	pygame.quit ()
 
-# win condition
 # avg time per set
-# hints
-# start new game on back button_name
-# currently is pause button - make one?
 # save score in txt file

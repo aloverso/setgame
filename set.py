@@ -42,6 +42,7 @@ MEDIUM = 2
 HARD = 1
 
 NUM_HINTS = 100
+TIME_DEDUC = 3000
 
 FONT_BIG = pygame.font.SysFont ("Arial", 40)
 FONT_SMALL = pygame.font.SysFont ("Arial", 20)
@@ -328,11 +329,7 @@ class StatsButton (Button):
 			box_width = 13*WINDOW_WIDTH/16
 			for line in lines:
 				message_texts.append (ScreenText (line, line, 
-									pygame.Rect(left_margin, top_margin + 60*(lines.index(line)+1) ,box_width, 45), FONT_BIG))
-			# message_text = ScreenText ("message_text", win_stats,
-			# 						pygame.Rect (left_margin, top_margin, 3*CARD_WIDTH + 2*space_horiz, 4*CARD_HEIGHT + 3*((WINDOW_HEIGHT - 4*CARD_HEIGHT - 2*top_margin) / 3)),
-			# 						pygame.font.SysFont ("Arial", 40))
-			
+									  pygame.Rect(left_margin, top_margin + 60*(lines.index(line)+1) ,box_width, 45), FONT_BIG))
 
 			#message_text.background_color = (255,0,0) #fixthis not transparent
 			self.model.show_stats.append (message_box)
@@ -488,30 +485,43 @@ class Game ():
 			self.left_in_deck_label.update_text ("Deck: " + str (len (self.deck) - (len (self.in_play_cards) + len (self.out_of_play_cards))))
 
 			message_box = planes.Plane ('message_box',
-					pygame.Rect (left_margin, top_margin, 3*CARD_WIDTH + 2*space_horiz, 4*CARD_HEIGHT + 3*((WINDOW_HEIGHT - 4*CARD_HEIGHT - 2*top_margin) / 3)))
+										pygame.Rect (left_margin, 
+													top_margin, 
+													3*CARD_WIDTH + 2*space_horiz, 
+													4*CARD_HEIGHT + 3*((WINDOW_HEIGHT - 4*CARD_HEIGHT - 2*top_margin) / 3)))
 			message_box.image.fill ((0,0,0))
 			message_texts = []
 
 			# if game won or lost, note time game ended
 			if self.check_if_won () or self.check_if_lost ():
-				if self.check_if_won () and not self.added_time:
-					self.model.times.append ((pygame.time.get_ticks () - self.start_time)/ 1000)
-					self.added_time = True
 				if self.end_time == 0:
 					self.end_time = pygame.time.get_ticks ()
 
+				total_time = self.end_time - self.start_time - self.pause_time
+
+				if self.check_if_won () and not self.added_time:
+					self.model.times.append (total_time+(self.sets_wrong*TIME_DEDUC)/ 1000)
+					self.added_time = True
+
 				best_time = ""
 				if len(self.model.times) == 0:
-					best_time = format_secs ((self.end_time - self.start_time - self.pause_time)/ 1000)
+					best_time = format_secs (total_time/ 1000)
 				else:
 					best_time = format_secs (min (self.model.times))
 
-				win_stats = "Game Complete! \n" + "Total time: " + format_secs ((self.end_time - self.start_time - self.pause_time)/ 1000) + "\n" + \
+				win_stats = "Game Complete! \n" + \
+							"Total time: " + format_secs ((self.end_time - self.start_time - self.pause_time)/ 1000) + "\n" +\
 							"Best time: " + best_time
+
+				win_stats_with_loss = "Game Complete! \n" + \
+									  "Total time: " + format_secs (total_time/ 1000) + "\n" +\
+									  "Incorrect Sets: " + str(self.sets_wrong) + "\n" +\
+									  "Adjusted Time: " + format_secs ((total_time+(self.sets_wrong*TIME_DEDUC))/ 1000) + "\n" +\
+									  "Best time: " + best_time
 
 				lose_stats = "Game Over!"
 
-				stats = win_stats
+				stats = win_stats_with_loss
 				if self.check_if_lost ():
 					stats = lose_stats
 
@@ -523,7 +533,10 @@ class Game ():
 
 			elif self.paused_time_at != 0: #game is paused
 				message_texts.append (ScreenText ("message_text", "Game Paused",
-										pygame.Rect (left_margin, top_margin, 3*CARD_WIDTH + 2*space_horiz, 4*CARD_HEIGHT + 3*((WINDOW_HEIGHT - 4*CARD_HEIGHT - 2*top_margin) / 3)),
+										pygame.Rect (left_margin, 
+													top_margin, 
+													3*CARD_WIDTH + 2*space_horiz, 
+													4*CARD_HEIGHT + 3*((WINDOW_HEIGHT - 4*CARD_HEIGHT - 2*top_margin) / 3)),
 										FONT_BIG))
 				
 			self.actors.append (message_box)
@@ -754,6 +767,3 @@ if __name__ == "__main__":
 		time.sleep (.001)
 
 	pygame.quit ()
-
-# avg time per set
-# save score in txt file

@@ -500,7 +500,7 @@ class Game ():
 				total_time = self.end_time - self.start_time - self.pause_time
 
 				if self.check_if_won () and not self.added_time:
-					self.model.times.append (total_time+(self.sets_wrong*TIME_DEDUC)/ 1000)
+					self.model.add_time((total_time+(self.sets_wrong*TIME_DEDUC))/ 1000)
 					self.added_time = True
 
 				best_time = ""
@@ -608,8 +608,12 @@ class Model:
 
 		self.game = None
 		self.actors = []
-		#self.times_file = open("times_file.txt","rw+")
-		self.times = []
+		try:
+			times_file = open("times_file.txt","r")
+		except:
+			times_file = open("times_file.txt", "w+")
+		self.times = [int(score.strip()) for score in times_file.readlines()]
+		times_file.close()
 		self.show_stats = [] # a list of things for stats screen
 
 		########################
@@ -645,7 +649,14 @@ class Model:
 										self)
 
 		self.homebuttons = [self.start_button, self.notime_button, self.easy_button, self.med_button, self.hard_button, self.stats_button]
-		
+	
+	# Opens the times file and writes a new time score to the end
+	def add_time(self, time):
+		times_file = open("times_file.txt", "a")
+		times_file.write(str(time)+"\n")
+		self.times.append(time)
+		times_file.close()
+
 	# update model - either update homescreen or update game
 	def update (self):
 		if self.mode == MODE_HOME:

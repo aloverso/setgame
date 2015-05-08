@@ -2,6 +2,17 @@
 
 A Python implementation of the card game Set
 
+## Dependencies
+
+This depends on **pygame**
+
+In Linux environments, you can install pygame by typing:
+'''
+sudo apt-get install python-pygame
+'''
+
+For other operating systems, consult the pygame documentation.
+
 ## Features
 
 ### Homescreen
